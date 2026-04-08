@@ -19,6 +19,7 @@ export default function App() {
   const [aiAnimation, setAiAnimation] = useState(null);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [audioProgress, setAudioProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState(null);
   
   const audioRef = useRef(new Audio());
   const fileInputRef = useRef(null);
@@ -74,14 +75,17 @@ export default function App() {
   const generateAIVideo = async (prompt) => {
     setIsSearching(true);
     setAiAnimation(null);
+    setErrorMsg(null);
+    
     try {
       const systemPrompt = `You are an elite motion graphics engineer. 
       Generate a sophisticated, highly detailed, and cinematic SVG animation based on the description.
       Use complex <animate>, <animateTransform>, and CSS @keyframes within the SVG.
       Ensure the colors are vibrant (gradients) and the movement is smooth.
-      Respond ONLY with the SVG code.`;
+      Respond ONLY with the SVG code. No markdown formatting.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      // Fixed the model endpoint to the supported preview version
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -90,13 +94,23 @@ export default function App() {
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+      }
+
       const data = await response.json();
       const rawSvg = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
       if (rawSvg) {
-        setAiAnimation(rawSvg.replace(/```svg|```html|```/g, '').trim());
+        // Clean the response from potential markdown wrapping
+        const cleanSvg = rawSvg.replace(/```svg|```html|```/g, '').trim();
+        setAiAnimation(cleanSvg);
+      } else {
+        throw new Error("No animation code generated.");
       }
     } catch (error) {
       console.error("AI Generation Error:", error);
+      setErrorMsg(`Generation Failed: ${error.message}`);
     } finally {
       setIsSearching(false);
     }
@@ -107,11 +121,11 @@ export default function App() {
     if (searchMode === 'gen') return generateAIVideo(query);
     
     setIsSearching(true);
+    setErrorMsg(null);
     setResults([]);
     const timer = setTimeout(() => setTakingLong(true), 6000);
 
     try {
-      // Force search into professional stock domains
       const stockFilter = "site:pexels.com OR site:pixabay.com OR site:unsplash.com OR site:mixkit.co";
       const fullQuery = `${query} ${stockFilter}`;
       
@@ -119,10 +133,13 @@ export default function App() {
         method: 'POST'
       });
       
+      if (!response.ok) throw new Error("Backend search failed");
+      
       const data = await response.json();
       setResults(data);
     } catch (error) {
       console.error("Search failed:", error);
+      setErrorMsg("Search failed. Please try again later.");
     } finally {
       clearTimeout(timer);
       setIsSearching(false);
@@ -178,7 +195,10 @@ export default function App() {
             ].map((tab) => (
               <button 
                 key={tab.id}
-                onClick={() => setSearchMode(tab.id)}
+                onClick={() => {
+                  setSearchMode(tab.id);
+                  setErrorMsg(null);
+                }}
                 className={`flex-1 py-4 rounded-[1.8rem] flex items-center justify-center gap-2 font-bold transition-all ${searchMode === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-[1.02]' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
               >
                 <tab.icon className="w-5 h-5" /> {tab.label}
@@ -208,6 +228,12 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {errorMsg && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl text-center mb-8">
+            {errorMsg}
+          </div>
+        )}
 
         {/* AI GEN RESULT */}
         {searchMode === 'gen' && aiAnimation && (
@@ -285,7 +311,7 @@ export default function App() {
           </div>
         )}
 
-        {isSearching && !results.length && (
+        {isSearching && !results.length && !aiAnimation && (
           <div className="text-center py-20 space-y-4">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
             <p className="text-slate-500 animate-pulse">Scanning Global Repositories...</p>
