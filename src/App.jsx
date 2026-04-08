@@ -84,8 +84,11 @@ export default function App() {
       Ensure the colors are vibrant (gradients) and the movement is smooth.
       Respond ONLY with the SVG code. No markdown formatting.`;
 
-      // Fixed the model endpoint to the supported preview version
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+      // Endpoint updated to the highly reliable 1.5 Flash model
+      const modelName = "gemini-1.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +98,7 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+        throw new Error(`Endpoint Failed (${modelName}): ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -106,11 +109,11 @@ export default function App() {
         const cleanSvg = rawSvg.replace(/```svg|```html|```/g, '').trim();
         setAiAnimation(cleanSvg);
       } else {
-        throw new Error("No animation code generated.");
+        throw new Error("API responded successfully but no SVG content was generated.");
       }
     } catch (error) {
       console.error("AI Generation Error:", error);
-      setErrorMsg(`Generation Failed: ${error.message}`);
+      setErrorMsg(`Generation Error: ${error.message}`);
     } finally {
       setIsSearching(false);
     }
@@ -230,7 +233,8 @@ export default function App() {
         </div>
 
         {errorMsg && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl text-center mb-8">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-3xl text-center mb-8 font-mono text-sm max-w-2xl mx-auto">
+            <div className="font-bold mb-1 underline uppercase">Connection Error</div>
             {errorMsg}
           </div>
         )}
@@ -314,14 +318,14 @@ export default function App() {
         {isSearching && !results.length && !aiAnimation && (
           <div className="text-center py-20 space-y-4">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
-            <p className="text-slate-500 animate-pulse">Scanning Global Repositories...</p>
+            <p className="text-slate-500 animate-pulse">Establishing Neural Link...</p>
           </div>
         )}
       </main>
 
       <footer className="mt-20 border-t border-white/5 py-12 text-center">
         <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">
-          VisionFetch Engine v4.0.2 • Powered by Gemini Ultra
+          VisionFetch Engine v4.1.0 • Supported Models: 1.5 Flash
         </p>
       </footer>
     </div>
