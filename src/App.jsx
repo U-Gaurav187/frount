@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Search, Image as ImageIcon, Video, Upload, X, Filter, 
   Loader2, Globe, Download, Play, Pause, ExternalLink, 
-  Coffee, Music, Volume2, Music4 
+  Coffee, Music, Volume2, Music4, PlayCircle
 } from 'lucide-react';
 
 export default function App() {
@@ -13,10 +13,11 @@ export default function App() {
   const [takingLong, setTakingLong] = useState(false);
   const [results, setResults] = useState([]);
   const [playingAudio, setPlayingAudio] = useState(null);
+  const [audioProgress, setAudioProgress] = useState(0);
   const fileInputRef = useRef(null);
   const audioRef = useRef(new Audio());
 
-  // Handle Audio Playback
+  // Handle Audio Playback and Progress
   const toggleAudio = (url) => {
     if (playingAudio === url) {
       audioRef.current.pause();
@@ -30,13 +31,27 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current;
-    const handleEnd = () => setPlayingAudio(null);
+    const handleEnd = () => {
+      setPlayingAudio(null);
+      setAudioProgress(0);
+    };
+    const handleTimeUpdate = () => {
+      if (audio.duration) {
+        setAudioProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
+    
     audio.addEventListener('ended', handleEnd);
-    return () => audio.removeEventListener('ended', handleEnd);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => {
+      audio.removeEventListener('ended', handleEnd);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
   }, []);
 
   const downloadMedia = async (url, filename) => {
     try {
+      // Stock sites often allow direct blob fetching
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -47,6 +62,7 @@ export default function App() {
       link.click();
       document.body.removeChild(link);
     } catch (err) {
+      // If CORS blocks, we open in new tab
       window.open(url, '_blank');
     }
   };
@@ -69,7 +85,10 @@ export default function App() {
     const timer = setTimeout(() => setTakingLong(true), 8000);
 
     try {
-      const params = new URLSearchParams({ query, mode: searchMode });
+      // We explicitly request stock footage sources in the query sent to the backend
+      const stockQuery = `${query} site:pexels.com OR site:pixabay.com OR site:unsplash.com`;
+      const params = new URLSearchParams({ query: stockQuery, mode: searchMode });
+      
       const formData = new FormData();
       if (fileInputRef.current?.files[0]) {
         formData.append('ref_image', fileInputRef.current.files[0]);
@@ -118,7 +137,7 @@ export default function App() {
             Universal Media AI
           </h1>
           <p className="text-slate-400 text-lg md:text-xl font-light">
-            Find specific images, videos, and sound effects using deep-search intelligence.
+            Finding premium stock assets from Pixabay, Pexels & more.
           </p>
         </div>
 
@@ -148,7 +167,7 @@ export default function App() {
               <textarea
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search for ${searchMode === 'audio' ? 'cinematic swoosh, lo-fi beats, or industrial sounds...' : 'specific details, mechanisms, or scenes...'}`}
+                placeholder={`Search for ${searchMode === 'audio' ? 'cinematic swoosh, lo-fi beats...' : 'nature 4k, urban drone shots, tech closeups...'}`}
                 className="w-full bg-slate-950/60 border border-white/5 rounded-[2rem] py-6 pl-16 pr-6 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-lg min-h-[140px] placeholder:text-slate-600"
               />
             </div>
@@ -206,7 +225,7 @@ export default function App() {
               <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Search className="w-8 h-8 text-slate-700" />
               </div>
-              <p className="text-slate-500 font-medium">Ready to discover media assets...</p>
+              <p className="text-slate-500 font-medium">Ready to discover stock media assets...</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -214,25 +233,34 @@ export default function App() {
                 <div key={idx} className="group bg-[#0f172a]/50 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-blue-500/40 transition-all duration-500 hover:-translate-y-2 shadow-2xl">
                   <div className="relative aspect-video overflow-hidden bg-slate-950">
                     {searchMode === 'video' ? (
-                      <video 
-                        src={item.url} 
-                        className="w-full h-full object-cover"
-                        poster={item.thumbnail}
-                        onMouseOver={e => e.target.play()}
-                        onMouseOut={e => {e.target.pause(); e.target.currentTime = 0;}}
-                        muted loop playsInline
-                      />
+                      <div className="w-full h-full relative">
+                        <video 
+                          src={item.url} 
+                          className="w-full h-full object-cover"
+                          poster={item.thumbnail}
+                          controlsList="nodownload"
+                          onMouseOver={e => e.target.play()}
+                          onMouseOut={e => {e.target.pause(); e.target.currentTime = 0;}}
+                          muted loop playsInline
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50 group-hover:opacity-0 transition-opacity">
+                           <PlayCircle className="w-12 h-12 text-white" />
+                        </div>
+                      </div>
                     ) : searchMode === 'audio' ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-black p-6">
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-black p-6 relative">
                         <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${playingAudio === item.url ? 'bg-blue-500 scale-110 shadow-lg shadow-blue-500/40' : 'bg-white/5'}`}>
                           <Music className={`w-8 h-8 ${playingAudio === item.url ? 'text-white' : 'text-slate-600'}`} />
                         </div>
                         {playingAudio === item.url && (
-                          <div className="flex gap-1 mt-4">
-                            {[1, 2, 3, 4].map(i => (
-                              <div key={i} className="w-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s`, height: `${Math.random() * 20 + 10}px` }} />
-                            ))}
-                          </div>
+                          <>
+                            <div className="flex gap-1 mt-4 h-6 items-end">
+                              {[1, 2, 3, 4, 5].map(i => (
+                                <div key={i} className="w-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s`, height: `${Math.random() * 100}%` }} />
+                              ))}
+                            </div>
+                            <div className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-300" style={{ width: `${audioProgress}%` }} />
+                          </>
                         )}
                       </div>
                     ) : (
@@ -258,14 +286,15 @@ export default function App() {
                       ) : (
                         <button 
                           onClick={() => downloadMedia(item.url)}
-                          className="flex-1 bg-white text-black font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-400 transition-all active:scale-95"
+                          className="flex-1 bg-white text-black font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-400 transition-all active:scale-95 shadow-lg shadow-white/5"
                         >
-                          <Download className="w-5 h-5" /> Download
+                          <Download className="w-5 h-5" /> Grab Original
                         </button>
                       )}
                       <button 
                         onClick={() => window.open(item.url, '_blank')}
                         className="p-3.5 bg-white/10 backdrop-blur-md text-white rounded-2xl border border-white/10 hover:bg-white/20 transition-all"
+                        title="Open Source Site"
                       >
                         <ExternalLink className="w-5 h-5" />
                       </button>
@@ -274,14 +303,14 @@ export default function App() {
 
                   <div className="p-7">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
+                      <div className="flex-1 overflow-hidden">
                         <h3 className="font-bold text-slate-200 text-lg line-clamp-1 group-hover:text-blue-400 transition-colors">
-                          {item.title || 'Discovered Media Asset'}
+                          {item.title || 'Stock Asset Discovered'}
                         </h3>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                            Verified Source • {item.duration || 'HQ'}
+                            Source: {item.source || 'Premium Stock'} • {item.duration || 'Full HD'}
                           </p>
                         </div>
                       </div>
@@ -303,7 +332,7 @@ export default function App() {
       </main>
 
       <footer className="mt-20 border-t border-white/5 py-12 text-center text-slate-600 text-sm">
-        <p className="font-medium tracking-widest uppercase text-[10px]">Powered by VisionFetch AI Engine • 2026</p>
+        <p className="font-medium tracking-widest uppercase text-[10px]">Powered by VisionFetch Stock Engine • 2026</p>
       </footer>
     </div>
   );
